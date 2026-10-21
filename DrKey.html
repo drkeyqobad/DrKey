@@ -17,6 +17,23 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
   <style>
+
+    /* ===== License Gate ===== */
+    #license-gate{position:fixed;inset:0;z-index:99999;background:linear-gradient(160deg,#0f766e 0%,#134e4a 50%,#042f2e 100%);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Tahoma,Arial,sans-serif}
+    #license-gate.hidden{display:none!important}
+    .lic-card{background:#fff;border-radius:20px;padding:28px 22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center}
+    .lic-card h1{margin:0 0 6px;font-size:1.35rem;color:#0f766e}
+    .lic-card .sub{color:#64748b;font-size:.85rem;margin-bottom:18px;line-height:1.6}
+    .lic-device{background:#f0fdfa;border:1px dashed #0f766e;border-radius:12px;padding:12px;margin:12px 0;direction:ltr;font-family:monospace;font-size:.95rem;word-break:break-all;color:#134e4a;user-select:all}
+    .lic-device label{display:block;font-size:.75rem;color:#64748b;margin-bottom:4px;direction:rtl;font-family:Tahoma}
+    .lic-input{width:100%;padding:12px;border:2px solid #ccfbf1;border-radius:12px;font-size:1.05rem;text-align:center;letter-spacing:2px;direction:ltr;box-sizing:border-box;margin:8px 0 12px}
+    .lic-input:focus{outline:none;border-color:#0f766e}
+    .lic-btn{width:100%;padding:14px;border:none;border-radius:12px;background:#0f766e;color:#fff;font-size:1rem;font-weight:bold;cursor:pointer}
+    .lic-btn:active{opacity:.9}
+    .lic-err{color:#dc2626;font-size:.85rem;min-height:1.2em;margin-top:8px}
+    .lic-hint{margin-top:16px;font-size:.78rem;color:#64748b;line-height:1.7}
+    .lic-copy{margin-top:6px;background:#14b8a6;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.8rem;cursor:pointer}
+
     :root {
       --primary: #0f766e; --primary-light: #14b8a6; --primary-dark: #0d9488;
       --bg: #f0fdfa; --card: #fff; --text: #134e4a; --text-muted: #64748b;
@@ -224,6 +241,27 @@
   </style>
 </head>
 <body>
+
+<div id="license-gate" role="dialog" aria-modal="true">
+  <div class="lic-card">
+    <h1>🔐 فعال‌سازی دکترکی</h1>
+    <p class="sub">این نسخه تجاری است و فقط با لایسنس معتبر روی همین دستگاه کار می‌کند.</p>
+    <div class="lic-device">
+      <label>کد شناسایی دستگاه شما</label>
+      <span id="lic-device-id">—</span>
+    </div>
+    <button type="button" class="lic-copy" onclick="copyDeviceId()">کپی کد دستگاه</button>
+    <p class="sub" style="margin-top:14px">کد را برای فروشنده بفرستید و کلید فعال‌سازی را وارد کنید:</p>
+    <input id="lic-key-input" class="lic-input" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" />
+    <button type="button" class="lic-btn" onclick="activateLicense()">فعال‌سازی</button>
+    <div class="lic-err" id="lic-err"></div>
+    <p class="lic-hint">
+      تماس فروشنده: تلگرام <b dir="ltr">@mehdi_keyqobad</b><br>
+      هر لایسنس فقط برای <b>یک دستگاه</b> است.
+    </p>
+  </div>
+</div>
+
   <div class="header">
     <div class="header-top">
       <div class="logo">K</div>
@@ -14889,6 +14927,127 @@ if(document.readyState==='loading'){
   <button type="button" onclick="toggleTheme()" title="حالت شب">🌙/☀️</button>
   <button type="button" onclick="toggleFont()" title="اندازه متن">A+</button>
 </div>
+
+
+<script>
+/* ===== DrKey License System (device-bound) ===== */
+(function(){
+  // Secret used for offline validation — change this if you rebuild for a new product line
+  // Seller generator must use THE SAME secret.
+  var LIC_SECRET = 'DrKey-KeyQobad-2026-Tehran-Med#9f3a';
+
+  function fnv1a(str){
+    var h = 2166136261 >>> 0;
+    for (var i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h >>> 0;
+  }
+  function toCode(n){
+    // base36 uppercase fixed width
+    var s = (n >>> 0).toString(36).toUpperCase();
+    while(s.length < 4) s = '0'+s;
+    return s.slice(-4);
+  }
+  function makeKeyFromDevice(deviceId){
+    var a = fnv1a(deviceId + '|' + LIC_SECRET + '|A');
+    var b = fnv1a(deviceId + '|' + LIC_SECRET + '|B' + a);
+    var c = fnv1a(deviceId + '|' + LIC_SECRET + '|C' + b);
+    var d = fnv1a(deviceId + '|' + LIC_SECRET + '|D' + c);
+    return [toCode(a), toCode(b), toCode(c), toCode(d)].join('-');
+  }
+  function normalizeKey(k){
+    return String(k||'').toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/(.{4})/g,'$1-').replace(/-$/,'').slice(0,19);
+  }
+  function getOrCreateDeviceId(){
+    var key = 'drkey_device_id_v1';
+    var id = localStorage.getItem(key);
+    if (id && id.length >= 12) return id;
+    var parts = [
+      navigator.userAgent||'',
+      screen.width+'x'+screen.height,
+      screen.colorDepth||'',
+      Intl.DateTimeFormat().resolvedOptions().timeZone||'',
+      navigator.language||'',
+      navigator.hardwareConcurrency||'',
+      navigator.platform||''
+    ].join('|');
+    var rnd = (Math.random().toString(36).slice(2) + Date.now().toString(36)).toUpperCase();
+    var h1 = toCode(fnv1a(parts+'|1'));
+    var h2 = toCode(fnv1a(parts+'|2'+rnd));
+    var h3 = toCode(fnv1a(rnd+'|3'));
+    var h4 = toCode(fnv1a(parts+rnd+'|4'));
+    id = [h1,h2,h3,h4].join('-');
+    try { localStorage.setItem(key, id); } catch(e){}
+    return id;
+  }
+  function isLicensed(deviceId){
+    try {
+      var saved = localStorage.getItem('drkey_license_v1');
+      if (!saved) return false;
+      var obj = JSON.parse(saved);
+      if (!obj || !obj.key || obj.device !== deviceId) return false;
+      return normalizeKey(obj.key) === makeKeyFromDevice(deviceId);
+    } catch(e){ return false; }
+  }
+  function saveLicense(deviceId, key){
+    localStorage.setItem('drkey_license_v1', JSON.stringify({
+      device: deviceId,
+      key: normalizeKey(key),
+      at: new Date().toISOString()
+    }));
+  }
+
+  window.__drkeyDeviceId = getOrCreateDeviceId();
+  window.__drkeyMakeKey = makeKeyFromDevice; // not exposed in UI; generator is separate page
+
+  window.copyDeviceId = function(){
+    var t = window.__drkeyDeviceId;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(function(){ alert('کد دستگاه کپی شد'); }).catch(function(){ prompt('کپی کنید:', t); });
+    } else {
+      prompt('کپی کنید:', t);
+    }
+  };
+  window.activateLicense = function(){
+    var input = document.getElementById('lic-key-input');
+    var err = document.getElementById('lic-err');
+    var key = normalizeKey(input && input.value);
+    var deviceId = window.__drkeyDeviceId;
+    var expected = makeKeyFromDevice(deviceId);
+    if (key === expected) {
+      saveLicense(deviceId, key);
+      err.textContent = '';
+      hideGate();
+    } else {
+      err.textContent = 'کلید نامعتبر است یا برای این دستگاه صادر نشده.';
+    }
+  };
+
+  function hideGate(){
+    var g = document.getElementById('license-gate');
+    if (g) g.classList.add('hidden');
+    document.documentElement.style.overflow = '';
+  }
+  function showGate(){
+    var g = document.getElementById('license-gate');
+    var d = document.getElementById('lic-device-id');
+    if (d) d.textContent = window.__drkeyDeviceId;
+    if (g) g.classList.remove('hidden');
+    document.documentElement.style.overflow = 'hidden';
+    var input = document.getElementById('lic-key-input');
+    if (input) input.addEventListener('keydown', function(e){ if(e.key==='Enter') activateLicense(); });
+  }
+
+  function bootLicense(){
+    if (isLicensed(window.__drkeyDeviceId)) hideGate();
+    else showGate();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootLicense);
+  else bootLicense();
+})();
+</script>
 
 <script>
 if ('serviceWorker' in navigator) {
