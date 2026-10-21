@@ -3,9 +3,9 @@
 دستیار بالینی آفلاین با **لایسنس دستگاه‌محور**.
 
 ## سازنده
-**دکتر کیقباد** — تلگرام: [@mehdi_keyqobad](https://t.me/mehdi_keyqobad)
+**دکتر کیقباد** — تلگرام: [@Drmehdikeyqobad](https://t.me/Drmehdikeyqobad) · اینستاگرام: [@Drkeyqobad](https://instagram.com/Drkeyqobad)
 
-تشکر از **دکتر علی شاهسواری**
+تشکر از ****
 
 ---
 
