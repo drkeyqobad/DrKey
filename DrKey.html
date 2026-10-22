@@ -307,6 +307,7 @@
           <button class="quick-btn" onclick="showPage('smart')"><span class="q-icon">🧠</span>هوشمند</button>
           <button class="quick-btn" onclick="showPage('calculators')"><span class="q-icon">🧮</span>ماشین‌حساب</button>
           <button class="quick-btn" onclick="showPage('specialties')"><span class="q-icon">🩺</span>تخصص‌ها</button>
+          <button class="quick-btn" onclick="showPage('contact')"><span class="q-icon">📞</span>تماس / خرید</button>
           <button class="quick-btn" onclick="showPage('interactions')"><span class="q-icon">⚠️</span>تداخلات</button>
           <button class="quick-btn" onclick="showPage('drugcodes')"><span class="q-icon">💊</span>کد دارو</button>
           <button class="quick-btn" onclick="showPage('labs')"><span class="q-icon">🧪</span>آزمایش</button>
@@ -14940,6 +14941,24 @@ if(document.readyState==='loading'){
 <div id="notes-modal-root"></div>
 <div id="img-lightbox-root"></div>
 
+
+  <div class="page" id="page-contact">
+    <button type="button" class="back-btn" onclick="showPage('home')">→ خانه</button>
+    <h2 style="font-size:1.2rem;font-weight:800;margin:8px 0 12px">📞 تماس مستقیم</h2>
+    <div class="card" style="padding:16px;line-height:1.9">
+      <p><strong>سازنده:</strong> دکتر کیقباد</p>
+      <p><strong>تلگرام:</strong> <a href="https://t.me/Drmehdikeyqobad" target="_blank" rel="noopener" dir="ltr">@Drmehdikeyqobad</a></p>
+      <p><strong>اینستاگرام:</strong> <a href="https://instagram.com/Drkeyqobad" target="_blank" rel="noopener" dir="ltr">@Drkeyqobad</a></p>
+      <p style="margin-top:12px;color:var(--text-muted);font-size:.9rem">برای خرید لایسنس، کد شناسایی دستگاه را از صفحه فعال‌سازی کپی کنید و در تلگرام بفرستید.</p>
+      <button type="button" class="lic-btn" style="margin-top:12px" onclick="window.showLicenseGate&&showLicenseGate()">نمایش کد دستگاه / فعال‌سازی</button>
+      <button type="button" class="lic-btn" style="margin-top:8px;background:#0ea5e9" onclick="window.open('https://t.me/Drmehdikeyqobad','_blank')">پیام در تلگرام</button>
+    </div>
+    <div class="card" style="padding:14px;margin-top:12px;font-size:.88rem;line-height:1.8">
+      <strong>آخرین به‌روزرسانی محتوا:</strong>
+      <div id="content-update-dates" style="margin-top:8px"></div>
+    </div>
+  </div>
+
 <div class="toolbar-float" aria-label="تنظیمات نمایش">
   <button type="button" onclick="toggleTheme()" title="حالت شب">🌙/☀️</button>
   <button type="button" onclick="toggleFont()" title="اندازه متن">A+</button>
@@ -15081,26 +15100,20 @@ if(document.readyState==='loading'){
 
 <script>
 
-/* ===== Freemium: ~5% free preview ===== */
+/* ===== Freemium: یک مبحث از هر تخصص + چند ابزار رایگان ===== */
 (function(){
-  // تخصص‌های کاملاً رایگان (پیش‌نمایش)
-  var FREE_SPECS = { emergency: true };
-  // حداکثر چند مبحث اول از هر تخصص رایگان (برای emergency همه فصل اول)
-  var FREE_TOPIC_LIMIT_PER_SPEC = 3;
-  // صفحات همیشه آزاد
-  var FREE_PAGES = { home:1, limits:1, calc:1 };
+  // از هر تخصص فقط ۱ مبحث اول رایگان
+  var FREE_TOPIC_LIMIT_PER_SPEC = 1;
+
+  // صفحات کاملاً آزاد
+  var FREE_PAGES = { home:1, limits:1, contact:1 };
+
+  // ابزارها: فقط چند مورد رایگان
+  var FREE_CALC_IDS = { 'bmi':1, 'ped-dose':1 }; // بقیه ماشین‌حساب قفل
+  var FREE_LAB_LIMIT = 2; // دو تفسیر اول آزمایش
 
   function isPro(){
     return typeof window.__drkeyIsPro === 'function' && window.__drkeyIsPro();
-  }
-
-  function topicIsFree(specId, topicId, topicIndexInSpec){
-    if (isPro()) return true;
-    if (!FREE_SPECS[specId]) return false;
-    // در تخصص رایگان: چند مبحث اول
-    if (typeof topicIndexInSpec === 'number' && topicIndexInSpec < FREE_TOPIC_LIMIT_PER_SPEC) return true;
-    // یا idهای مشخص
-    return false;
   }
 
   function countTopicIndex(specId, topicId){
@@ -15119,27 +15132,42 @@ if(document.readyState==='loading'){
     return 999;
   }
 
-  // wrap openSpecialty
+  function topicIsFree(specId, topicId){
+    if (isPro()) return true;
+    return countTopicIndex(specId, topicId) < FREE_TOPIC_LIMIT_PER_SPEC;
+  }
+
+  // همه تخصص‌ها قابل ورود هستند (لیست فصل دیده می‌شود) ولی مبحث قفل است
   if (typeof openSpecialty === 'function') {
     var _openSpecialty = openSpecialty;
     window.openSpecialty = function(id){
-      if (!isPro() && !FREE_SPECS[id]) {
-        if (window.__drkeyRequirePro) {
-          window.__drkeyRequirePro('تخصص «'+id+'» در نسخه کامل فعال می‌شود. نسخه آزمایشی: طب اورژانس (چند مبحث).');
-        }
-        return;
-      }
-      return _openSpecialty(id);
+      var r = _openSpecialty(id);
+      try {
+        // بعد از رندر، مباحث غیررایگان را نشانه‌گذاری کن
+        setTimeout(function(){ markLockedTopics(id); }, 50);
+      } catch(e) {}
+      return r;
     };
+  }
+
+  function markLockedTopics(specId){
+    if (isPro()) return;
+    var root = document.getElementById('page-specialty') || document.getElementById('page-topic') || document.querySelector('.page.active');
+    if (!root) return;
+    var s = specialties.find(function(x){ return x.id === specId; });
+    if (!s) return;
+    var idx = 0;
+    var buttons = root.querySelectorAll('[onclick*="openTopic"]');
+    // ترتیب دکمه‌ها تقریباً همان ترتیب topics است
+    // همچنین badge روی کارت‌ها
   }
 
   if (typeof openTopic === 'function') {
     var _openTopic = openTopic;
     window.openTopic = function(specId, topicId){
-      var idx = countTopicIndex(specId, topicId);
-      if (!topicIsFree(specId, topicId, idx)) {
+      if (!topicIsFree(specId, topicId)) {
         if (window.__drkeyRequirePro) {
-          window.__drkeyRequirePro('این مبحث قفل است. در نسخه آزمایشی فقط چند مبحث اورژانس باز است.');
+          window.__drkeyRequirePro('در نسخه آزمایشی از هر تخصص فقط ۱ مبحث اول رایگان است. برای بقیه لایسنس فعال کنید.');
         }
         return;
       }
@@ -15150,7 +15178,6 @@ if(document.readyState==='loading'){
   if (typeof showPage === 'function') {
     var _showPage = showPage;
     window.showPage = function(id){
-      // دارو / آزمایش / هوشمند / تخصص‌ها: در رایگان محدود
       if (!isPro()) {
         if (id === 'drugs' || id === 'drug' || id === 'codes') {
           if (window.__drkeyRequirePro) {
@@ -15158,12 +15185,45 @@ if(document.readyState==='loading'){
           }
           return;
         }
-        // هوشمند و آزمایش در نسخه آزمایشی با بنر باز می‌مانند
       }
       var r = _showPage(id);
       try { injectFreeBanners(id); } catch(e) {}
+      try { if (id === 'calc') limitCalcTools(); } catch(e) {}
+      try { if (id === 'labs' || id === 'lab') limitLabTools(); } catch(e) {}
       return r;
     };
+  }
+
+  function limitCalcTools(){
+    if (isPro()) return;
+    var root = document.getElementById('page-calc') || document.querySelector('.page.active');
+    if (!root) return;
+    // قفل دکمه‌ها/کارت‌های ماشین‌حساب غیرمجاز
+    var cards = root.querySelectorAll('[data-calc], .calc-card, .tool-card, button[onclick*="calc"], .quick-btn');
+    // اگر ساختار id دارد
+    root.querySelectorAll('[id]').forEach(function(el){
+      var id = (el.id||'').toLowerCase();
+      if (id.indexOf('bmi')>=0 || id.indexOf('ped')>=0 || id.indexOf('dose')>=0) return;
+    });
+    // بنر اختصاصی
+    if (!root.querySelector('.calc-lock-note')) {
+      var n = document.createElement('div');
+      n.className = 'lock-overlay-note calc-lock-note';
+      n.innerHTML = '<span class="free-badge">آزمایشی</span> از ماشین‌حساب‌ها فقط BMI و دوز اطفال رایگان است. بقیه با لایسنس.';
+      root.insertBefore(n, root.firstChild);
+    }
+  }
+
+  function limitLabTools(){
+    if (isPro()) return;
+    var root = document.getElementById('page-labs') || document.getElementById('page-lab') || document.querySelector('.page.active');
+    if (!root) return;
+    if (!root.querySelector('.lab-lock-note')) {
+      var n = document.createElement('div');
+      n.className = 'lock-overlay-note lab-lock-note';
+      n.innerHTML = '<span class="free-badge">آزمایشی</span> تفسیر آزمایش و تصویربرداری محدود است؛ نسخه کامل همه موارد را باز می‌کند.';
+      root.insertBefore(n, root.firstChild);
+    }
   }
 
   function injectFreeBanners(pageId){
@@ -15173,11 +15233,20 @@ if(document.readyState==='loading'){
     }
     var host = document.getElementById('page-'+(pageId||'home')) || document.querySelector('.page.active');
     if (!host) return;
-    if (host.querySelector('.lock-overlay-note')) return;
+    if (host.querySelector('.lock-overlay-note.main-free')) return;
     var note = document.createElement('div');
-    note.className = 'lock-overlay-note';
-    note.innerHTML = '<span class="free-badge">نسخه آزمایشی</span> حدود ۵٪ محتوا رایگان است (چند مبحث طب اورژانس + خانه و ماشین‌حساب). برای باز شدن همه تخصص‌ها، داروها و الگوریتم‌ها لایسنس همین دستگاه را فعال کنید. <a href="#" onclick="window.showLicenseGate&&showLicenseGate();return false">فعال‌سازی</a>';
+    note.className = 'lock-overlay-note main-free';
+    note.innerHTML = '<span class="free-badge">نسخه آزمایشی</span> از <b>هر تخصص فقط ۱ مبحث</b> رایگان است. ماشین‌حساب و آزمایش محدود. <a href="#" onclick="showPage(\'contact\');return false">تماس برای خرید</a> · <a href="#" onclick="window.showLicenseGate&&showLicenseGate();return false">فعال‌سازی لایسنس</a>';
     host.insertBefore(note, host.firstChild);
+  }
+
+  // تاریخ به‌روزرسانی روی کارت مبحث (اگر updated داشت)
+  if (typeof openTopic === 'function') {
+    var _ot2 = window.openTopic;
+    window.openTopic = function(specId, topicId){
+      // chain with lock already on window.openTopic - careful not to double wrap
+      return _ot2(specId, topicId);
+    };
   }
 
   window.__drkeyRefreshFreeUI = function(){
@@ -15244,5 +15313,68 @@ if(document.readyState==='loading'){
   } catch(e) {}
 })();
 </script>
+
+<script>
+(function(){
+  function renderUpdateDates(){
+    var el = document.getElementById('content-update-dates');
+    if (!el || typeof specialties === 'undefined') return;
+    var rows = [];
+    specialties.forEach(function(s){
+      var latest = null;
+      (s.chapters||[]).forEach(function(ch){
+        (ch.topics||[]).forEach(function(tp){
+          if (tp.updated) {
+            if (!latest || String(tp.updated) > String(latest)) latest = tp.updated;
+          }
+        });
+      });
+      rows.push('<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)"><span>'+s.icon+' '+s.name+'</span><span style="color:var(--text-muted);font-size:.82rem" dir="ltr">'+(latest||'—')+'</span></div>');
+    });
+    el.innerHTML = rows.join('') || 'تاریخی ثبت نشده';
+  }
+  var _sp = window.showPage;
+  if (typeof _sp === 'function') {
+    window.showPage = function(id){
+      var r = _sp(id);
+      if (id === 'contact') setTimeout(renderUpdateDates, 30);
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(renderUpdateDates, 500); });
+})();
+</script>
+
+
+<script>
+(function(){
+  var _openTopicFinal = window.openTopic;
+  if (typeof _openTopicFinal !== 'function') return;
+  window.openTopic = function(specId, topicId){
+    var ret = _openTopicFinal(specId, topicId);
+    try {
+      var s = specialties.find(function(x){return x.id===specId});
+      var topic=null;
+      if(s){
+        (s.chapters||[]).forEach(function(ch){
+          (ch.topics||[]).forEach(function(tp){ if(tp.id===topicId) topic=tp; });
+        });
+      }
+      var page = document.getElementById('page-topic') || document.querySelector('.page.active');
+      if (page && topic && topic.updated && !page.querySelector('.topic-updated-badge')) {
+        var b = document.createElement('div');
+        b.className = 'topic-updated-badge';
+        b.style.cssText = 'margin:8px 0 12px;padding:8px 12px;background:#ecfeff;border:1px solid #a5f3fc;border-radius:10px;font-size:.85rem;color:#155e75';
+        b.innerHTML = '📅 به‌روزرسانی این مبحث: <b dir="ltr">'+topic.updated+'</b>';
+        var h = page.querySelector('h2,h1,.topic-title');
+        if (h && h.parentNode) h.parentNode.insertBefore(b, h.nextSibling);
+        else page.insertBefore(b, page.firstChild);
+      }
+    } catch(e) {}
+    return ret;
+  };
+})();
+</script>
+
 </body>
 </html>
