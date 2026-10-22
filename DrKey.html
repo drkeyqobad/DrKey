@@ -15376,5 +15376,94 @@ if(document.readyState==='loading'){
 })();
 </script>
 
+
+<script>
+/* ===== Auto-update: هر چند دقیقه version.json را چک می‌کند ===== */
+(function(){
+  var CHECK_MS = 3 * 60 * 1000; // هر ۳ دقیقه
+  var KEY = 'drkey_app_version';
+
+  function fetchVersion(){
+    return fetch('./version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ if(!r.ok) throw new Error('no version'); return r.json(); });
+  }
+
+  function showUpdateBar(ver){
+    if (document.getElementById('drkey-update-bar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'drkey-update-bar';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#0f766e;color:#fff;padding:10px 14px;font-size:.9rem;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.2);font-family:Tahoma,sans-serif';
+    bar.innerHTML = '<span>🆕 نسخه جدید آماده است'+(ver && ver.version ? ' (v'+ver.version+')' : '')+'</span><button type="button" id="drkey-update-btn" style="background:#fff;color:#0f766e;border:none;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">به‌روزرسانی</button>';
+    document.body.appendChild(bar);
+    document.getElementById('drkey-update-btn').onclick = function(){
+      // پاک‌سازی کش و رفرش اجباری
+      var done = function(){ location.reload(true); };
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function(rs){
+          return Promise.all(rs.map(function(r){ return r.unregister(); }));
+        }).then(function(){
+          if (window.caches && caches.keys) {
+            return caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); });
+          }
+        }).then(done).catch(done);
+      } else done();
+    };
+  }
+
+  function check(){
+    fetchVersion().then(function(ver){
+      if (!ver || !ver.version) return;
+      var local = null;
+      try { local = localStorage.getItem(KEY); } catch(e) {}
+      if (!local) {
+        try { localStorage.setItem(KEY, ver.version); } catch(e) {}
+        return;
+      }
+      if (local !== ver.version) {
+        // نسخه جدید — نوار به‌روزرسانی + در پس‌زمینه SW آپدیت
+        showUpdateBar(ver);
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+            navigator.serviceWorker.getRegistration().then(function(reg){
+              if (reg) reg.update();
+            });
+          }
+        } catch(e) {}
+      }
+    }).catch(function(){});
+  }
+
+  // بعد از لود و دوره‌ای
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(check, 2000); });
+  } else {
+    setTimeout(check, 2000);
+  }
+  setInterval(check, CHECK_MS);
+
+  // وقتی تب دوباره فعال شد هم چک کن
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) check();
+  });
+
+  // بعد از آپدیت موفق، نسخه را ذخیره کن (در همان reload بار اول version ست می‌شود)
+  // دکمه به‌روزرسانی قبل از reload نسخه جدید را می‌نویسد:
+  window.__drkeyMarkUpdated = function(v){
+    try { localStorage.setItem(KEY, v); } catch(e) {}
+  };
+  // وقتی کاربر دکمه زد، version جدید را از server بگیر و ذخیره کن
+  var _origShow = null;
+  document.addEventListener('click', function(e){
+    if (e.target && e.target.id === 'drkey-update-btn') {
+      fetchVersion().then(function(ver){
+        if (ver && ver.version) {
+          try { localStorage.setItem(KEY, ver.version); } catch(e) {}
+        }
+      }).catch(function(){});
+    }
+  }, true);
+})();
+</script>
+
 </body>
 </html>

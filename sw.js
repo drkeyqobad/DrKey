@@ -1,4 +1,4 @@
-const CACHE = 'drkey-v4-netfirst';
+const CACHE = 'drkey-v5-autoupdate';
 const PRECACHE = [
   './manifest.json',
   './icon-192.png',
@@ -22,6 +22,13 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  const u = new URL(e.request.url);
+  // version.json هرگز از کش قدیمی نیاید
+  if (u.pathname.endsWith('version.json')) {
+    e.respondWith(fetch(e.request, { cache: 'no-store' }).catch(() => caches.match(e.request)));
+    return;
+  }
+
   const req = e.request;
   if (req.method !== 'GET') return;
 
