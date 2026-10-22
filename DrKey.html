@@ -21,6 +21,12 @@
     /* ===== License Gate ===== */
     #license-gate{position:fixed;inset:0;z-index:99999;background:linear-gradient(160deg,#0f766e 0%,#134e4a 50%,#042f2e 100%);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Tahoma,Arial,sans-serif}
     #license-gate.hidden{display:none!important}
+    #license-gate .lic-card .lic-close{position:absolute;top:10px;left:10px;background:transparent;border:none;font-size:1.4rem;cursor:pointer;color:#64748b}
+    .lic-card{position:relative}
+    .free-badge{display:inline-block;background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:8px;margin-right:6px}
+    .lock-overlay-note{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:10px 12px;margin:10px 0;font-size:.85rem;color:#065f46;line-height:1.6}
+    .spec-card.locked-spec{opacity:.92;position:relative}
+    .spec-card.locked-spec::after{content:"🔒";position:absolute;top:8px;left:8px;font-size:.9rem}
     .lic-card{background:#fff;border-radius:20px;padding:28px 22px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center}
     .lic-card h1{margin:0 0 6px;font-size:1.35rem;color:#0f766e}
     .lic-card .sub{color:#64748b;font-size:.85rem;margin-bottom:18px;line-height:1.6}
@@ -254,8 +260,9 @@
 
 <div id="license-gate" role="dialog" aria-modal="true">
   <div class="lic-card">
-    <h1>🔐 فعال‌سازی دکترکی</h1>
-    <p class="sub">این نسخه تجاری است و فقط با لایسنس معتبر روی همین دستگاه کار می‌کند.</p>
+    <button type="button" class="lic-close" onclick="hideLicenseGate()" aria-label="بستن">×</button>
+    <h1>🔓 ادامه با نسخه کامل</h1>
+    <p class="sub">بخش رایگان را دیدید. برای باز شدن بقیه تخصص‌ها، داروها و الگوریتم‌ها لایسنس این دستگاه را فعال کنید.</p>
     <div class="lic-device">
       <label>کد شناسایی دستگاه شما</label>
       <span id="lic-device-id">—</span>
@@ -15051,11 +15058,136 @@ if(document.readyState==='loading'){
   }
 
   function bootLicense(){
-    if (isLicensed(window.__drkeyDeviceId)) hideGate();
-    else showGate();
+    // نسخه آزمایشی: اپ باز است؛ قفل فقط روی محتوای غیررایگان
+    hideGate();
+    try {
+      if (window.__drkeyRefreshFreeUI) window.__drkeyRefreshFreeUI();
+    } catch(e) {}
   }
+  window.hideLicenseGate = hideGate;
+  window.showLicenseGate = showGate;
+  window.__drkeyIsPro = function(){ return isLicensed(window.__drkeyDeviceId); };
+  window.__drkeyRequirePro = function(msg){
+    if (window.__drkeyIsPro()) return true;
+    var err = document.getElementById('lic-err');
+    if (err) err.textContent = msg || 'این بخش در نسخه کامل است.';
+    showGate();
+    return false;
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootLicense);
   else bootLicense();
+})();
+</script>
+
+<script>
+
+<script>
+/* ===== Freemium: ~5% free preview ===== */
+(function(){
+  // تخصص‌های کاملاً رایگان (پیش‌نمایش)
+  var FREE_SPECS = { emergency: true };
+  // حداکثر چند مبحث اول از هر تخصص رایگان (برای emergency همه فصل اول)
+  var FREE_TOPIC_LIMIT_PER_SPEC = 3;
+  // صفحات همیشه آزاد
+  var FREE_PAGES = { home:1, limits:1, calc:1 };
+
+  function isPro(){
+    return typeof window.__drkeyIsPro === 'function' && window.__drkeyIsPro();
+  }
+
+  function topicIsFree(specId, topicId, topicIndexInSpec){
+    if (isPro()) return true;
+    if (!FREE_SPECS[specId]) return false;
+    // در تخصص رایگان: چند مبحث اول
+    if (typeof topicIndexInSpec === 'number' && topicIndexInSpec < FREE_TOPIC_LIMIT_PER_SPEC) return true;
+    // یا idهای مشخص
+    return false;
+  }
+
+  function countTopicIndex(specId, topicId){
+    try {
+      var s = specialties.find(function(x){ return x.id === specId; });
+      if (!s) return 999;
+      var idx = 0;
+      for (var ci=0; ci<(s.chapters||[]).length; ci++){
+        var tops = s.chapters[ci].topics || [];
+        for (var ti=0; ti<tops.length; ti++){
+          if (tops[ti].id === topicId) return idx;
+          idx++;
+        }
+      }
+    } catch(e) {}
+    return 999;
+  }
+
+  // wrap openSpecialty
+  if (typeof openSpecialty === 'function') {
+    var _openSpecialty = openSpecialty;
+    window.openSpecialty = function(id){
+      if (!isPro() && !FREE_SPECS[id]) {
+        if (window.__drkeyRequirePro) {
+          window.__drkeyRequirePro('تخصص «'+id+'» در نسخه کامل فعال می‌شود. نسخه آزمایشی: طب اورژانس (چند مبحث).');
+        }
+        return;
+      }
+      return _openSpecialty(id);
+    };
+  }
+
+  if (typeof openTopic === 'function') {
+    var _openTopic = openTopic;
+    window.openTopic = function(specId, topicId){
+      var idx = countTopicIndex(specId, topicId);
+      if (!topicIsFree(specId, topicId, idx)) {
+        if (window.__drkeyRequirePro) {
+          window.__drkeyRequirePro('این مبحث قفل است. در نسخه آزمایشی فقط چند مبحث اورژانس باز است.');
+        }
+        return;
+      }
+      return _openTopic(specId, topicId);
+    };
+  }
+
+  if (typeof showPage === 'function') {
+    var _showPage = showPage;
+    window.showPage = function(id){
+      // دارو / آزمایش / هوشمند / تخصص‌ها: در رایگان محدود
+      if (!isPro()) {
+        if (id === 'drugs' || id === 'drug' || id === 'codes') {
+          if (window.__drkeyRequirePro) {
+            window.__drkeyRequirePro('بانک کامل کد دارو فقط در نسخه کامل است.');
+          }
+          return;
+        }
+        // هوشمند و آزمایش در نسخه آزمایشی با بنر باز می‌مانند
+      }
+      var r = _showPage(id);
+      try { injectFreeBanners(id); } catch(e) {}
+      return r;
+    };
+  }
+
+  function injectFreeBanners(pageId){
+    if (isPro()) {
+      document.querySelectorAll('.lock-overlay-note').forEach(function(el){ el.remove(); });
+      return;
+    }
+    var host = document.getElementById('page-'+(pageId||'home')) || document.querySelector('.page.active');
+    if (!host) return;
+    if (host.querySelector('.lock-overlay-note')) return;
+    var note = document.createElement('div');
+    note.className = 'lock-overlay-note';
+    note.innerHTML = '<span class="free-badge">نسخه آزمایشی</span> حدود ۵٪ محتوا رایگان است (چند مبحث طب اورژانس + خانه و ماشین‌حساب). برای باز شدن همه تخصص‌ها، داروها و الگوریتم‌ها لایسنس همین دستگاه را فعال کنید. <a href="#" onclick="window.showLicenseGate&&showLicenseGate();return false">فعال‌سازی</a>';
+    host.insertBefore(note, host.firstChild);
+  }
+
+  window.__drkeyRefreshFreeUI = function(){
+    try { injectFreeBanners(window.__drkeyPage || 'home'); } catch(e) {}
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){ try { injectFreeBanners('home'); } catch(e) {} }, 300);
+  });
 })();
 </script>
 
