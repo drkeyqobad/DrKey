@@ -15060,11 +15060,58 @@ if(document.readyState==='loading'){
 </script>
 
 <script>
-if ('serviceWorker' in navigator) {
+/* SW: با رفرش نسخه جدید از شبکه؛ کش قدیمی پاک می‌شود */
+(function(){
+  if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', function() {
-    navigator.serviceWorker.register('./sw.js').catch(function(){});
+    navigator.serviceWorker.register('./sw.js?v=4').then(function(reg) {
+      try { reg.update(); } catch(e) {}
+      setInterval(function(){ try { reg.update(); } catch(e) {} }, 60 * 60 * 1000);
+      if (reg.waiting) {
+        reg.waiting.postMessage('SKIP_WAITING');
+      }
+      reg.addEventListener('updatefound', function() {
+        var nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', function() {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            nw.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+    }).catch(function(){});
+
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   });
-}
+
+  // یک‌بار بعد از آپدیت بزرگ: اگر نسخه SW قدیمی بود، کش را خالی کن
+  try {
+    var SWV = 'drkey-sw-v4';
+    if (localStorage.getItem('drkey_sw_ver') !== SWV) {
+      localStorage.setItem('drkey_sw_ver', SWV);
+      if (navigator.serviceWorker.getRegistrations) {
+        navigator.serviceWorker.getRegistrations().then(function(rs) {
+          rs.forEach(function(r){ r.unregister(); });
+        }).then(function(){
+          if (window.caches && caches.keys) {
+            caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); });
+          }
+        }).then(function(){
+          // رفرش یک‌بار برای گرفتن SW جدید
+          if (!sessionStorage.getItem('drkey_sw_reloaded')) {
+            sessionStorage.setItem('drkey_sw_reloaded', '1');
+            location.reload();
+          }
+        });
+      }
+    }
+  } catch(e) {}
+})();
 </script>
 </body>
 </html>
